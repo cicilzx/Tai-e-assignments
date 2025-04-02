@@ -1,5 +1,4 @@
 class Assign {
-
     int switch1(int x, int y){
         int a = 0;
         switch(x){
@@ -23,22 +22,8 @@ class Assign {
     }
 
     int switch2(int x, int y){
-        int a = 0;
-        switch(x){
-            case 1:
-                a-=y;
-                break;
-            case 2:
-                a+=y;
-            case 3:
-                a*=y;
-            case 4:
-                a/=y;
-                break;
-            default:
-                a = a-1;
-        }
-        a = a+x;
+        int a;
+        a = a + 1;
         return a;
     }
 

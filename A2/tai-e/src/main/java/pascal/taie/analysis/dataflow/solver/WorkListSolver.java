@@ -38,19 +38,21 @@ class WorkListSolver<Node, Fact> extends Solver<Node, Fact> {
     @Override
     protected void doSolveForward(CFG<Node> cfg, DataflowResult<Node, Fact> result) {
         // TODO - finish me
-        Queue<Node> workList = new LinkedList<>(cfg.getNodes());
-        while(!workList.isEmpty()){
-            Node node = workList.poll();
+
+        LinkedList<Node> workList = new LinkedList<>(cfg.getNodes());
+        while (!workList.isEmpty()) {
+            Node node = workList.removeFirst();  // 不放回的拿出一个 node
+
+            // 计算 in，调用 meetInto 和 transferNode
             CPFact in = new CPFact();
-            CPFact out = (CPFact) result.getOutFact(node);
             for(Node pred : cfg.getPredsOf(node)){
                 analysis.meetInto(result.getOutFact(pred), (Fact) in);
             }
-            if(analysis.transferNode(node, (Fact) in, (Fact) out)){
-                cfg.getSuccsOf(node).forEach(workList::offer);
+            // 如果 transferNode 之后有更新，代表
+            if (analysis.transferNode(node, (Fact) in, result.getOutFact(node))) {
+                workList.addAll(cfg.getSuccsOf(node));
             }
-            result.setInFact(node, (Fact) in);
-            result.setOutFact(node, (Fact) out);
+
         }
 
     }

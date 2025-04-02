@@ -100,24 +100,29 @@ public class ConstantPropagation extends
     @Override
     public boolean transferNode(Stmt stmt, CPFact in, CPFact out) {
         // TODO - finish me
-        AtomicBoolean changed = new AtomicBoolean(false);
-        in.forEach(((var, value) -> {
-            if(out.update(var, value)){
-                changed.set(true);
-            }
-        }));
+        // 首先，更新 out = in，只要 out 发生变化，那么一定代表有更新
+        boolean changed = false;
+        if (!out.equals(in)) {
+            out.copyFrom(in);
+            changed = true;
+        }
 
-        if (stmt instanceof DefinitionStmt<?, ?> s) {
+        // 如果是definition stmt，就需要按照 transfer function 重新计算 out
+        if (stmt instanceof DefinitionStmt s) {
             if(s.getLValue() instanceof Var var && canHoldInt(var)) {
-                CPFact inCopy = in.copy();
-                Value removedVal = inCopy.get(var);
-                inCopy.remove(var);
-                Value newVal = evaluate(s.getRValue(), in);
-                out.update(var, newVal);
-                return !removedVal.equals(newVal) || changed.get();
+                CPFact tmp = in.copy();
+                tmp.remove(var);
+                Value removedVal = in.get(var);
+                Value gen = evaluate(s.getRValue(), in);
+                tmp.update(var, gen);
+
+                if (!removedVal.equals(gen)) {  // 只要删除的 val 和 更新的 val 不一样，那就代表有更新
+                    out.copyFrom(tmp);
+                    changed = true;
+                }
             }
         }
-        return changed.get();
+        return changed;
     }
 
     /**
