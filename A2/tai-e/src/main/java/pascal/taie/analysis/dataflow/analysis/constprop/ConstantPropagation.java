@@ -71,9 +71,11 @@ public class ConstantPropagation extends
     @Override
     public void meetInto(CPFact fact, CPFact target) {
         // TODO - finish me
-        fact.forEach(((var, value) -> {
-            target.update(var, meetValue(value, target.get(var)));
-        }));
+        for (Var key: fact.keySet()) {
+            if (canHoldInt(key)) {
+                target.update(key, meetValue(fact.get(key), target.get(key)));
+            }
+        }
     }
 
     /**
