@@ -25,7 +25,9 @@ package pascal.taie.analysis.dataflow.solver;
 import pascal.taie.analysis.dataflow.analysis.DataflowAnalysis;
 import pascal.taie.analysis.dataflow.analysis.constprop.CPFact;
 import pascal.taie.analysis.dataflow.fact.DataflowResult;
+import pascal.taie.analysis.dataflow.fact.SetFact;
 import pascal.taie.analysis.graph.cfg.CFG;
+import pascal.taie.ir.exp.Var;
 
 import java.util.LinkedList;
 import java.util.Queue;
@@ -39,38 +41,52 @@ class WorkListSolver<Node, Fact> extends Solver<Node, Fact> {
     @Override
     protected void doSolveForward(CFG<Node> cfg, DataflowResult<Node, Fact> result) {
         // TODO - finish me
-        Queue<Node> workList = new LinkedList<>(cfg.getNodes());
-        while(!workList.isEmpty()){
-            Node node = workList.poll();
+        LinkedList<Node> workList = new LinkedList<>(cfg.getNodes());
+        while (!workList.isEmpty()) {
+            Node node = workList.removeFirst();  // 不放回的拿出一个 node
+
+            // 计算 in，调用 meetInto 和 transferNode
             CPFact in = new CPFact();
-            CPFact out = (CPFact) result.getOutFact(node);
             for(Node pred : cfg.getPredsOf(node)){
                 analysis.meetInto(result.getOutFact(pred), (Fact) in);
             }
-            if(analysis.transferNode(node, (Fact) in, (Fact) out)){
-                cfg.getSuccsOf(node).forEach(workList::offer);
-            }
             result.setInFact(node, (Fact) in);
-            result.setOutFact(node, (Fact) out);
+            // 如果 transferNode 之后有更新，代表
+            if (analysis.transferNode(node, result.getInFact(node), result.getOutFact(node))) {
+                workList.addAll(cfg.getSuccsOf(node));
+            }
+
         }
     }
 
     @Override
     protected void doSolveBackward(CFG<Node> cfg, DataflowResult<Node, Fact> result) {
         // TODO - finish me
-        Queue<Node> workList = new LinkedList<>(cfg.getNodes());
-        while(!workList.isEmpty()) {
-            Node node = workList.poll();
-            CPFact out = new CPFact();
-            CPFact in = (CPFact) result.getInFact(node);
-            for(Node succ : cfg.getSuccsOf(node)){
-                analysis.meetInto(result.getInFact(succ), (Fact) out);
+//        LinkedList<Node> workList = new LinkedList<>(cfg.getNodes());
+//        while(!workList.isEmpty()) {
+//            Node node = workList.removeFirst();
+//
+//            // SetFact<Var> out = new SetFact<Var>();
+//            for (Node succ: cfg.getSuccsOf(node)) {
+//                analysis.meetInto(result.getInFact(succ), result.getOutFact(node));
+//            }
+//            if (analysis.transferNode(node, result.getInFact(node), result.getOutFact(node))) {
+//                workList.addAll(cfg.getPredsOf(node));
+//            }
+//        }
+        boolean chage = true;
+        while (chage) {
+            chage = false;
+            for (Node node : cfg.getNodes()) {
+                if (!node.equals(cfg.getExit())) {
+                    for (Node succ : cfg.getSuccsOf(node)) {
+                        analysis.meetInto(result.getInFact(succ), result.getOutFact(node));
+                        if (analysis.transferNode(node, result.getInFact(node), result.getOutFact(node))) {
+                            chage = true;
+                        }
+                    }
+                }
             }
-            if (analysis.transferNode(node, (Fact) in, (Fact) out)){
-                cfg.getPredsOf(node).forEach(workList::offer);
-            }
-            result.setInFact(node, (Fact) in);
-            result.setOutFact(node, (Fact) out);
         }
     }
 }

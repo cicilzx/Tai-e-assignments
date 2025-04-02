@@ -1,16 +1,20 @@
 class Loops {
 
-    void deadLoop() {
-        int x = 1;
-        int y = 0;
-        int z = 100;
-        while (x > y) {
-            use(z);
+    void foo(int x, int y) {
+        int a;
+        if (x > y) {
+            a = 0;
+        } else {
+            a = 1;
         }
-        dead(); // unreachable branch
+        use(a);
     }
 
-    void dead() {
+    int bar() {
+        int x = 1;
+        int y = x;
+        int z = y;
+        return z;
     }
 
     void use(int n) {

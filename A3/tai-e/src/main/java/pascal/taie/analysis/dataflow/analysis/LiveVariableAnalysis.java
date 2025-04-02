@@ -64,26 +64,30 @@ public class LiveVariableAnalysis extends
     @Override
     public void meetInto(SetFact<Var> fact, SetFact<Var> target) {
         // TODO - finish me
-        fact.union(target);
+        target.union(fact);
     }
 
     @Override
     public boolean transferNode(Stmt stmt, SetFact<Var> in, SetFact<Var> out) {
         // TODO - finish me
-        SetFact<Var> newIn = new SetFact<>();
-        newIn.union(out);
+        SetFact<Var> newIn = out.copy();
+
         if(stmt.getDef().isPresent()) {
             LValue lValue = stmt.getDef().get();
-            newIn.remove((Var) lValue);
+            if (lValue instanceof Var) {
+                newIn.remove((Var) lValue);
+            }
         }
+
         for (RValue rValue: stmt.getUses()) {
-            newIn.add((Var) rValue);
+            if (rValue instanceof Var) {
+                newIn.add((Var) rValue);
+            }
         }
-        if (in==newIn) {
-            return false;
-        } else {
+        if (!in.equals(newIn)) {
             in.set(newIn);
             return true;
         }
+        return false;
     }
 }

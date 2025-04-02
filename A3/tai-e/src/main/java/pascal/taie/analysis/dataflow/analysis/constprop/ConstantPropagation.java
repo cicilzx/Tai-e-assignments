@@ -55,7 +55,9 @@ public class ConstantPropagation extends
         // TODO - finish me
         CPFact fact = new CPFact();
         for(Var var: cfg.getIR().getParams()) {
-            fact.update(var, Value.getNAC());
+            if (canHoldInt(var)) {
+                fact.update(var, Value.getNAC());
+            }
         }
         return fact;
     }
@@ -69,9 +71,11 @@ public class ConstantPropagation extends
     @Override
     public void meetInto(CPFact fact, CPFact target) {
         // TODO - finish me
-        fact.forEach((var, val) -> {
-            target.update(var, meetValue(val, target.get(var)));
-        });
+        for (Var key: fact.keySet()) {
+            if (canHoldInt(key)) {
+                target.update(key, meetValue(fact.get(key), target.get(key)));
+            }
+        }
     }
 
     /**
@@ -98,24 +102,27 @@ public class ConstantPropagation extends
     @Override
     public boolean transferNode(Stmt stmt, CPFact in, CPFact out) {
         // TODO - finish me
-        AtomicBoolean changed = new AtomicBoolean(false);
-        in.forEach(((var, value) -> {
-            if(out.update(var, value)){
-                changed.set(true);
-            }
-        }));
+        boolean changed = false;
+        if (!out.equals(in)) {
+            out.copyFrom(in);
+            changed = true;
+        }
 
-        if (stmt instanceof DefinitionStmt<?, ?> s) {
-            if(s.getLValue() instanceof Var var && canHoldInt(var)) {
-                CPFact inCopy = in.copy();
-                Value removedVal = inCopy.get(var);
-                inCopy.remove(var);
-                Value newVal = evaluate(s.getRValue(), in);
-                out.update(var, newVal);
-                return !removedVal.equals(newVal) || changed.get();
+        if (stmt instanceof DefinitionStmt s) {
+            if (s.getLValue() instanceof Var var && canHoldInt(var)) {
+                CPFact tmp = in.copy();
+                tmp.remove(var);
+                Value removedVal = in.get(var);
+                Value gen = evaluate(s.getRValue(), in);
+                tmp.update(var, gen);
+
+                if (!gen.equals(removedVal)) {
+                    out.copyFrom(tmp);
+                    changed = true;
+                }
             }
         }
-        return changed.get();
+        return changed;
     }
 
     /**
@@ -215,6 +222,6 @@ public class ConstantPropagation extends
                 return Value.getUndef();
             }
         }
-        return Value.getUndef();
+        return Value.getNAC();
     }
 }
