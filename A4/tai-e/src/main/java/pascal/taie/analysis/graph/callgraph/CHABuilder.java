@@ -31,6 +31,7 @@ import pascal.taie.language.classes.JMethod;
 import pascal.taie.language.classes.Subsignature;
 
 import java.util.ArrayDeque;
+import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
 
@@ -59,7 +60,40 @@ class CHABuilder implements CGBuilder<Invoke, JMethod> {
      */
     private Set<JMethod> resolve(Invoke callSite) {
         // TODO - finish me
-        return null;
+        Set<JMethod> methods = new HashSet<>();
+        CallKind callKind = CallGraphs.getCallKind(callSite);
+
+        if (callKind == CallKind.STATIC) {
+            Subsignature sig = callSite.getMethodRef().getSubsignature();
+            JMethod method = callSite.getMethodRef().getDeclaringClass().getDeclaredMethod(sig);
+            methods.add(method);
+        }
+        if (callKind == CallKind.SPECIAL) {
+            JClass jClass = callSite.getMethodRef().getDeclaringClass();
+            JMethod method = dispatch(jClass, callSite.getMethodRef().getSubsignature());
+            if (method != null) {
+                methods.add(method);
+            }
+        }
+        if (callKind == CallKind.VIRTUAL || callKind == CallKind.INTERFACE) {
+            JClass jClass = callSite.getMethodRef().getDeclaringClass();
+            JMethod method = dispatch(jClass, callSite.getMethodRef().getSubsignature());
+            if (method != null) {
+                methods.add(method);
+            }
+
+            Set<JClass> cubClasses = new HashSet<>();
+            cubClasses.addAll(hierarchy.getDirectImplementorsOf(jClass));
+            cubClasses.addAll(hierarchy.getDirectSubclassesOf(jClass));
+            cubClasses.addAll(hierarchy.getDirectSubinterfacesOf(jClass));
+            for (JClass cubClass : cubClasses) {
+                JMethod jmethod = dispatch(cubClass, callSite.getMethodRef().getSubsignature());
+                if (jmethod != null) {
+                    methods.add(jmethod);
+                }
+            }
+        }
+        return methods;
     }
 
     /**
@@ -70,6 +104,14 @@ class CHABuilder implements CGBuilder<Invoke, JMethod> {
      */
     private JMethod dispatch(JClass jclass, Subsignature subsignature) {
         // TODO - finish me
-        return null;
+        JMethod jMethod = jclass.getDeclaredMethod(subsignature);
+        if (jMethod != null && !jMethod.isAbstract()) {
+            return jMethod;
+        } else {
+            if (jclass.getSuperClass()!= null) {
+                return dispatch(jclass.getSuperClass(), subsignature);
+            }
+            return null;
+        }
     }
 }
