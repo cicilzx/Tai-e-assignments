@@ -25,15 +25,13 @@ package pascal.taie.analysis.graph.callgraph;
 import pascal.taie.World;
 import pascal.taie.ir.proginfo.MethodRef;
 import pascal.taie.ir.stmt.Invoke;
+import pascal.taie.ir.stmt.Stmt;
 import pascal.taie.language.classes.ClassHierarchy;
 import pascal.taie.language.classes.JClass;
 import pascal.taie.language.classes.JMethod;
 import pascal.taie.language.classes.Subsignature;
-
-import java.util.ArrayDeque;
-import java.util.HashSet;
-import java.util.Queue;
-import java.util.Set;
+import soot.util.ArraySet;
+import java.util.*;
 
 /**
  * Implementation of the CHA algorithm.
@@ -48,12 +46,51 @@ class CHABuilder implements CGBuilder<Invoke, JMethod> {
         return buildCallGraph(World.get().getMainMethod());
     }
 
+    private CallKind getCallKind(Invoke callSite) {
+        if (callSite.isVirtual()) {
+            return CallKind.VIRTUAL;
+        } else if (callSite.isStatic()) {
+            return CallKind.STATIC;
+        } else if (callSite.isInterface()) {
+            return CallKind.INTERFACE;
+        } else if (callSite.isSpecial()) {
+            return CallKind.SPECIAL;
+        } else if (callSite.isDynamic()) {
+            return CallKind.DYNAMIC;
+        }
+        return null;
+    }
+
     private CallGraph<Invoke, JMethod> buildCallGraph(JMethod entry) {
         DefaultCallGraph callGraph = new DefaultCallGraph();
         callGraph.addEntryMethod(entry);
         // TODO - finish me
+        LinkedList<JMethod> workList = new LinkedList<>();
+        workList.add(entry);
+
+        while (!workList.isEmpty()) {
+            JMethod method = workList.removeFirst();
+            if (!callGraph.contains(method)) {
+                callGraph.addReachableMethod(method);
+                for (Invoke callSite: callGraph.getCallSitesIn(method)) {
+                    Set<JMethod> targets = resolve(callSite);
+                    CallKind kind = getCallKind(callSite);
+                    if (kind != null) {
+                        for (JMethod target: targets) {
+                            if (target != null) {
+                                callGraph.addEdge(new Edge<>(kind, callSite, target));
+                                workList.addAll(targets);
+                            }
+                        }
+                    }
+                }
+            }
+        }
         return callGraph;
     }
+
+
+
 
     /**
      * Resolves call targets (callees) of a call site via CHA.
@@ -61,40 +98,41 @@ class CHABuilder implements CGBuilder<Invoke, JMethod> {
     private Set<JMethod> resolve(Invoke callSite) {
         // TODO - finish me
         Set<JMethod> methods = new HashSet<>();
-        CallKind callKind = CallGraphs.getCallKind(callSite);
 
-        if (callKind == CallKind.STATIC) {
-            Subsignature sig = callSite.getMethodRef().getSubsignature();
-            JMethod method = callSite.getMethodRef().getDeclaringClass().getDeclaredMethod(sig);
+        if (callSite.isStatic()) {
+            MethodRef methodRef = callSite.getMethodRef();
+            JMethod method = methodRef.getDeclaringClass().getDeclaredMethod(methodRef.getSubsignature());
             methods.add(method);
-        }
-        if (callKind == CallKind.SPECIAL) {
+        } else if (callSite.isSpecial()) {
             JClass jClass = callSite.getMethodRef().getDeclaringClass();
             JMethod method = dispatch(jClass, callSite.getMethodRef().getSubsignature());
             if (method != null) {
                 methods.add(method);
             }
-        }
-        if (callKind == CallKind.VIRTUAL || callKind == CallKind.INTERFACE) {
+        } else if (callSite.isInterface() || callSite.isVirtual()) {
+            LinkedList<JClass> subClasses = new LinkedList<>();
             JClass jClass = callSite.getMethodRef().getDeclaringClass();
-            JMethod method = dispatch(jClass, callSite.getMethodRef().getSubsignature());
-            if (method != null) {
-                methods.add(method);
-            }
+            subClasses.add(jClass);
 
-            Set<JClass> cubClasses = new HashSet<>();
-            cubClasses.addAll(hierarchy.getDirectImplementorsOf(jClass));
-            cubClasses.addAll(hierarchy.getDirectSubclassesOf(jClass));
-            cubClasses.addAll(hierarchy.getDirectSubinterfacesOf(jClass));
-            for (JClass cubClass : cubClasses) {
-                JMethod jmethod = dispatch(cubClass, callSite.getMethodRef().getSubsignature());
+            while (!subClasses.isEmpty()) {
+                JClass subClass = subClasses.removeFirst();
+                JMethod jmethod = dispatch(subClass, callSite.getMethodRef().getSubsignature());
                 if (jmethod != null) {
                     methods.add(jmethod);
+                }
+                if (subClass.isInterface()) {
+                    subClasses.addAll(hierarchy.getDirectImplementorsOf(subClass));
+                    subClasses.addAll(hierarchy.getDirectSubinterfacesOf(subClass));
+                } else {
+                    subClasses.addAll(hierarchy.getDirectSubclassesOf(subClass));
                 }
             }
         }
         return methods;
     }
+
+
+
 
     /**
      * Looks up the target method based on given class and method subsignature.
